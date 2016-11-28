@@ -1,0 +1,285 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="http://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="../lib/mamejs.js"></script>
+    <style>
+    body {
+      margin: 0px;
+      padding:0px;
+    }
+    .main-container {
+      background-image: url(../assets/background.png);
+      background-size: 800px 452px;
+      background-color: #000333;
+      width: 800px;
+      height: 452px;
+      position: relative;
+    }
+    .game-title {
+      position: absolute;
+      top: 90px;
+      left: 76px;
+      width: 640px;
+      height: 34px;
+      background-image: url(../assets/game-title.png);
+      background-size: 640px 34px;
+    }
+    .gamelist {
+      position: absolute;
+      top: 140px;
+      left: 0px;
+      overflow: hidden;
+      width: 800px;
+      height: 190px;
+    }
+    .game-selector {
+      transition: left 0.5s ease 0s;
+      position: absolute;
+      top: 0px;
+      left: 78px;
+      width: 148px;
+      height: 182px;
+      border: 3px solid #07FFFF;
+      z-index: 2;
+    }
+    .game-item {
+      transition: left 0.5s ease 0s;
+      position: absolute;
+      top: 2px;
+      width: 150px;
+      height: 184px;
+      background-image: url(../assets/game-item.png);
+      background-size: 150px 184px;
+      z-index: 1;
+    }
+
+    .game-item img {
+      width: 100px;
+      margin-left: 26px;
+      margin-top: 4px;
+    }
+
+    .game-container {
+      display:none;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+      z-index: 10;
+    }
+    .nes-container {
+      width: 602px;
+      height: 452px;
+      position:absolute;
+      top: 0px;
+      left: 99px;
+    }
+    .close-button {
+      color: white;
+      cursor: pointer;
+      text-align: right;
+    }
+    </style>
+  </head>
+  <body>
+  <div class="main-container">
+    <div class="game-container">
+      <div class="close-button">close</div>
+      <div class="nes-container"></div>
+    </div>
+    <div class="game-title"></div>
+    <div class="gamelist">
+      <div class="game-selector" style="left:78px"></div>
+    </div>
+  </div>
+  <script>
+  var startIndex = 22
+      currentFirstIndex = startIndex,
+      currentLastIndex = 7,
+      startLeft = -240,
+      endLeft = 880,
+      gamelistContainer = document.getElementsByClassName('gamelist')[0],
+      gamelist = null,
+      gap = 160,
+      animationHasEnded = true,
+      gameContainer = document.getElementsByClassName('game-container')[0],
+      gameLaunched = false,
+      nesContainer = document.getElementsByClassName('nes-container')[0],
+      cursorPosition = 1,
+      closeButton = document.getElementsByClassName('close-button')[0]
+
+  var controlsMapping = [
+    {
+      start: emloader.helper.KeyCode.enter,
+      select:emloader.helper.KeyCode.shift,
+      up: emloader.helper.KeyCode.uparrow,
+      down: emloader.helper.KeyCode.downarrow,
+      left: emloader.helper.KeyCode.leftarrow,
+      right: emloader.helper.KeyCode.rightarrow,
+      button1: emloader.helper.KeyCode.z,
+      button2: emloader.helper.KeyCode.x,
+    }
+  ]
+  var controllers = new emloader.Controllers(controlsMapping)
+  controllers.bind()
+
+  // holds saves
+  // {romName: [{time: timestamp, file: Uint8Array}, {...}]}
+  var saves = {}
+
+  $('document').ready(function() {
+    $.get('../src/games.json', function(data) {
+      gamelist = data
+      createGameItems()
+    })
+  })
+
+  function runGame(game) {
+    gameLaunched = true
+    nesContainer.innerHTML = ''
+    gameContainer.style.display = 'block'
+
+    return emloader.load(gamelist.emulator, nesContainer).then(function(loader) {
+      loader.FS.mkdir('/roms')
+      window.loader = loader
+
+      controllers.setKeyHandler(loader.keyHandler)
+
+      var romName = game.rom.split('/').pop()
+      console.log('romName', romName, game.rom)
+      return loader.loadFile('../roms/' + game.rom, romName, '/roms').then(function() {
+        loader.module.callMain(['/roms/' + romName])
+      })
+    })
+  }
+
+  function createItem(game, leftPos, index) {
+    var item = document.createElement('div')
+
+    item.className = 'game-item'
+    item.style.left = leftPos + 'px'
+
+    item.dataset.index = index
+
+    var img = document.createElement('img')
+    img.src = game.image
+
+    item.appendChild(img)
+
+    return item
+  }
+
+  function createGameItems() {
+    var nextLeft = startLeft
+    for (var i = startIndex; i < (startIndex + 8); i++) {
+      var item = createItem(gamelist.games[i], nextLeft, i);
+      nextLeft += gap
+      gamelistContainer.appendChild(item)
+    }
+  }
+
+  function moveBackground(moveLeft) {
+    if (!animationHasEnded) {
+      return
+    }
+    animationHasEnded = false
+
+    var items = gamelistContainer.getElementsByClassName('game-item');
+    var firstItem,
+        lastItem
+
+    for (var i = 0, l = items.length; i < l; i++) {
+      if (i === 0) {
+        (function(item) {firstItem = item})(items[i])
+      } else if (i === (l - 1)) {
+        (function(item) {lastItem = item})(items[i])
+      }
+
+      var currentLeft = parseInt(items[i].style.left.replace('px', ''), 10)
+      items[i].style.left = currentLeft + (moveLeft ? -gap : gap) + 'px'
+    }
+
+    // remove first or last
+    var removeId = moveLeft ? 0 : 7
+    items[removeId].parentNode.removeChild(items[removeId])
+
+    // add a new item at the begining or the end
+    var index = moveLeft ? lastItem.dataset.index : firstItem.dataset.index
+    if (moveLeft) {
+      if (++index === gamelist.games.length) {
+        index = 0
+      }
+    } else {
+      if (--index === -1) {
+        index = gamelist.games.length - 1
+      }
+    }
+
+    var addGame = gamelist.games[index]
+    var item = createItem(addGame, moveLeft ? endLeft : startLeft, index)
+
+    if (moveLeft) {
+      gamelistContainer.appendChild(item)
+    } else {
+      gamelistContainer.insertBefore(item,items[0])
+    }
+
+    // prevent animation break if key pressed continously
+    setTimeout(function() {animationHasEnded = true;}, 501)
+  }
+
+  function getCurrentGame() {
+    return gamelist.games[document.getElementsByClassName('game-item')[cursorPosition + 1].dataset.index]
+  }
+
+  function saveGame() {
+    //todo
+  }
+
+  closeButton.addEventListener('click', function() {
+    gameContainer.style.display = 'none'
+
+    saveGame()
+    gameLaunched = false
+  })
+
+  document.addEventListener('keypress', function(evt) {
+    if (!gameLaunched && evt.keyCode === emloader.helper.KeyCode.enter) {
+      runGame(getCurrentGame())
+    }
+  })
+
+  // Animate
+  document.addEventListener('keydown', function(evt) {
+    var leftArrow = emloader.helper.KeyCode.leftarrow
+    var rightArrow = emloader.helper.KeyCode.rightarrow
+
+    if (evt.keyCode === leftArrow || evt.keyCode === rightArrow) {
+      var leftLimit = 78
+      var rightLimit = 558
+      var selector = document.getElementsByClassName('game-selector')[0]
+      var currentLeft = parseInt(selector.style.left.replace('px', ''), 10)
+
+      if (evt.keyCode === leftArrow) {
+        if (cursorPosition > 1) {
+          cursorPosition--
+          selector.style.left = currentLeft - gap + 'px'
+        } else {
+          // move background to right
+          moveBackground(false)
+        }
+      } else {
+        if (cursorPosition < 4) {
+          cursorPosition++
+          selector.style.left = currentLeft + gap + 'px'
+        } else {
+          // move background to left
+          moveBackground(true)
+        }
+      }
+    }
+  })
+  </script>
+  </body>
+</html>

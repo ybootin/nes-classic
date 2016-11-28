@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script src="http://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script src="../lib/mamejs.js"></script>
+    <!-- Bootstrap-select for gamepad / keyboard selection -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.11.2/css/bootstrap-select.min.css">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Nestopia - Demo page</h1>
+      <hr />
+      <div id="main-container" style="display:block">
+        <div class="row">
+          <div id="buttons-container" class="col-xs-12"></div>
+        </div>
+        <div class="row">
+          <div id="game-container" style="width:300px;height:300px" class="row"></div>
+          <div class="control-container row">
+            <div id="player1controller" class="game-controller"></div>
+          </div>
+        </div>
+        <div class="row gamelist" id="gamelist-container"></div>
+      </div>
+    </div>
+    <script>
+      $('document').ready(function() {
+        $.get('../src/games.json', main)
+      })
+      // Global vars
+      var container = document.getElementById('game-container'),
+          mainContainer = document.getElementById('main-container'),
+          gamelistContainer = document.getElementById('gamelist-container')
+          controller1Container = document.getElementById('player1controller')
+
+      var controlsMapping = [
+        {
+          start: emloader.helper.KeyCode.enter,
+          select:emloader.helper.KeyCode.shift,
+          up: emloader.helper.KeyCode.uparrow,
+          down: emloader.helper.KeyCode.downarrow,
+          left: emloader.helper.KeyCode.leftarrow,
+          right: emloader.helper.KeyCode.rightarrow,
+          button1: emloader.helper.KeyCode.z,
+          button2: emloader.helper.KeyCode.x,
+        }
+      ]
+
+      function runNestopia(game) {
+        container.innerHTML = ''
+
+        return emloader.load('https://buildbot.libretro.com/web/nestopia_libretro.js', container).then(function(loader) {
+          loader.FS.mkdir('/roms')
+          window.loader = loader
+
+
+          var controllers = new emloader.Controllers(controlsMapping)
+          controllers.setKeyHandler(loader.keyHandler)
+          controllers.bind()
+
+          // var controller1 = new emloader.plugins.VirtualController(controllers, controlsMapping[0])
+          // controller1Container.appendChild(controller1.getElement())
+          var romName = game.rom.split('/').pop()
+          return loader.loadFile('../roms/' + game.rom, romName, '/roms').then(function() {
+            loader.module.callMain(['/roms/' + romName])
+          })
+        })
+      }
+
+      function main(gamelist) {
+        gamelist.games.forEach(function(game) {
+          var div = document.createElement('div')
+          div.innerHTML = '<img src="' + game.image + '">';
+
+          div.style.display = "inline-block"
+          div.addEventListener('click', function() {
+            runNestopia(game)
+          })
+          gamelistContainer.appendChild(div)
+        })
+      }
+
+      function buildSelector(container, gamelist) {
+        for (var i = 0; i < 8; i++) {
+          var game = gamelist[i]
+          var div = document.createElement('div')
+          div.className = "game-item"
+          var img = document.createElement('img')
+          img.src = game.image
+          div.appendChild(img)
+
+          container.appendChild(div)
+        }
+        var selector = document.createElement('div')
+        selector.className = 'selector'
+        selector.left = '100px'
+        container.appendChild(selector)
+      }
+    </script>
+  </body>
+</html>
